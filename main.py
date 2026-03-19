@@ -414,22 +414,22 @@ def draw(surface, gs, ins, vs):
         chars_to_show = int(gs.narrative_chars)
         visible_text = str(full_text)[:chars_to_show]
         
-        box_rect = pygame.Rect(VIRTUAL_WIDTH//2 - 320, VIRTUAL_HEIGHT//2 + 20, 640, 230)
+        box_rect = pygame.Rect(VIRTUAL_WIDTH//2 - 320, VIRTUAL_HEIGHT//2 - 50, 640, 260)
         pygame.draw.rect(surface, (15, 15, 30, 250), box_rect, border_radius=15)
         pygame.draw.rect(surface, GOLD_COLOR, box_rect, width=3, border_radius=15)
         
         # Wrapped story text
         if visible_text.strip():
-            draw_text_wrapped(surface, visible_text, vs.font_content, (245, 245, 255), box_rect.inflate(-60, -60))
+            draw_text_wrapped(surface, visible_text, vs.font_content, (245, 245, 255), box_rect.inflate(-60, -80))
         
         # Manual appears at end
         if chars_to_show >= len(full_text):
-            y_m = box_rect.bottom - 80
+            y_m = box_rect.bottom - 90
             for m_l in manual:
                 draw_text_centered_shadow(surface, m_l, vs.font_content, GOLD_COLOR, y_m, x_center=box_rect.centerx)
-                y_m += 22
+                y_m += 25
 
-        btn_rect = pygame.Rect(VIRTUAL_WIDTH//2 - 120, VIRTUAL_HEIGHT//2 + 260, 240, 50)
+        btn_rect = pygame.Rect(VIRTUAL_WIDTH//2 - 120, box_rect.bottom + 20, 240, 50)
         is_hover = btn_rect.collidepoint(gs.mouse_pos)
         prompt = "INICIAR" if chars_to_show >= len(full_text) else "PULAR"
         draw_button(surface, btn_rect, prompt, vs.font_ui, GOLD_COLOR, hover=is_hover)
@@ -568,7 +568,7 @@ def handle_input(gs, ins, scale):
         if gs.state == "STORY":
             if event.type == pygame.MOUSEBUTTONDOWN:
                 mx, my = [p // scale for p in event.pos]
-                btn_rect = pygame.Rect(VIRTUAL_WIDTH//2 - 120, VIRTUAL_HEIGHT//2 + 260, 240, 50)
+                btn_rect = pygame.Rect(VIRTUAL_WIDTH//2 - 120, (VIRTUAL_HEIGHT//2 - 50) + 260 + 20, 240, 50)
                 if btn_rect.collidepoint(mx, my):
                     gs.__init__(); gs.state = "PLAYING"; ins.reset_pos()
             continue
