@@ -122,6 +122,9 @@ class GameState:
         self.score_pop_timer, self.life_flash_timer = 0, 0
         self.display_score = 0
         self.time_counter = 0
+        self.narrative_chars = 0
+        self.last_narrative_update = 0
+        self.mouse_pos = (0, 0)
 
     def get_current_card(self):
         if self.current_card_index >= len(self.cards_list):
@@ -214,6 +217,8 @@ def update(gs, ins, scale):
     if gs.display_score < gs.score: gs.display_score += 1
     elif gs.display_score > gs.score: gs.display_score -= 1
     gs.breathing_angle += 0.05; gs.time_counter += 1
+    if gs.state == "MENU" and gs.time_counter % 2 == 0:
+        gs.narrative_chars += 1
     if gs.card_entry_y > ins.start_pos[1]: gs.card_entry_y -= (gs.card_entry_y - ins.start_pos[1]) * 0.1
     if random.random() < 0.2:
         gs.particles.append(Particle(random.randint(0, VIRTUAL_WIDTH//4), random.randint(VIRTUAL_HEIGHT-50, VIRTUAL_HEIGHT), "hell"))
@@ -322,14 +327,21 @@ def draw(surface, gs, ins, vs):
     for p in gs.particles: p.draw(surface)
     
     if gs.state == "MENU":
-        draw_text_centered_shadow(surface, "HEAVEN OR HELL", vs.font_feedback, HEAVEN_GLOW, VIRTUAL_HEIGHT//2 - 140)
-        draw_text_centered_shadow(surface, "JULGAMENTO FINAL", vs.font_ui, (200, 200, 210), VIRTUAL_HEIGHT//2 - 80)
+        draw_text_centered_shadow(surface, "HEAVEN OR HELL", vs.font_feedback, HEAVEN_GLOW, VIRTUAL_HEIGHT//2 - 160)
+        draw_text_centered_shadow(surface, "JULGAMENTO FINAL", vs.font_ui, (200, 200, 210), VIRTUAL_HEIGHT//2 - 100)
         
-        narrative = "Você foi escolhido para julgar quem irá para o céu e inferno, faça corretamente pois assim você também poderá reencarnar, caso falhe você irá para o inferno"
-        draw_text_box(surface, narrative, vs.font_content, (180, 180, 190), pygame.Rect(VIRTUAL_WIDTH//2 - 250, VIRTUAL_HEIGHT//2 - 40, 500, 150))
+        full_text = "Você foi escolhido para julgar quem irá para o céu e inferno, faça corretamente pois assim você também poderá reencarnar, caso falhe você irá para o inferno"
+        visible_text = full_text[:gs.narrative_chars]
+        
+        # Narrator Box Style
+        box_rect = pygame.Rect(VIRTUAL_WIDTH//2 - 270, VIRTUAL_HEIGHT//2 - 40, 540, 160)
+        pygame.draw.rect(surface, (0, 0, 0, 180), box_rect, border_radius=12)
+        pygame.draw.rect(surface, GOLD_COLOR, box_rect, width=2, border_radius=12)
+        draw_text_box(surface, visible_text, vs.font_content, (220, 220, 230), box_rect.inflate(-40, -40))
 
-        btn_rect = pygame.Rect(VIRTUAL_WIDTH//2 - 150, VIRTUAL_HEIGHT//2 + 100, 300, 70)
-        draw_button(surface, btn_rect, "COMEÇAR", vs.font_ui, GOLD_COLOR)
+        btn_rect = pygame.Rect(VIRTUAL_WIDTH//2 - 150, VIRTUAL_HEIGHT//2 + 150, 300, 70)
+        is_hover = btn_rect.collidepoint(gs.mouse_pos)
+        draw_button(surface, btn_rect, "COMEÇAR", vs.font_ui, GOLD_COLOR, hover=is_hover)
         return
 
     cx = ins.card_pos[0] + CARD_WIDTH // 2
@@ -422,15 +434,17 @@ def draw(surface, gs, ins, vs):
         ov = pygame.Surface((VIRTUAL_WIDTH,VIRTUAL_HEIGHT), pygame.SRCALPHA); ov.fill((0,0,0,230)); surface.blit(ov, (0,0))
         draw_text_centered_shadow(surface, "JOGADO ÀS TREVAS", vs.font_feedback, (255,50,50), VIRTUAL_HEIGHT//2-100)
         draw_text_centered_shadow(surface, f"Você falhou na fase {gs.level}. Destino: Inferno.", vs.font_content, (200,200,200), VIRTUAL_HEIGHT//2 - 20)
-        btn_rect = pygame.Rect(VIRTUAL_WIDTH//2 - 150, VIRTUAL_HEIGHT//2 + 60, 300, 70)
-        draw_button(surface, btn_rect, "MENU PRINCIPAL", vs.font_ui, (200, 200, 210))
+        btn_rect = pygame.Rect(VIRTUAL_WIDTH//2 - 150, VIRTUAL_HEIGHT//2 + 80, 300, 70)
+        is_hover = btn_rect.collidepoint(gs.mouse_pos)
+        draw_button(surface, btn_rect, "MENU PRINCIPAL", vs.font_ui, (200, 200, 210), hover=is_hover)
 
     if gs.state == "VICTORY":
         ov = pygame.Surface((VIRTUAL_WIDTH,VIRTUAL_HEIGHT), pygame.SRCALPHA); ov.fill((0,30,60,230)); surface.blit(ov, (0,0))
         draw_text_centered_shadow(surface, "REENCARNAÇÃO", vs.font_feedback, HEAVEN_GLOW, VIRTUAL_HEIGHT//2-100)
         draw_text_centered_shadow(surface, "Você provou ser um juiz justo. A vida te chama novamente.", vs.font_content, (200,255,200), VIRTUAL_HEIGHT//2 - 20)
-        btn_rect = pygame.Rect(VIRTUAL_WIDTH//2 - 150, VIRTUAL_HEIGHT//2 + 60, 300, 70)
-        draw_button(surface, btn_rect, "VOLTAR AO MENU", vs.font_ui, GOLD_COLOR)
+        btn_rect = pygame.Rect(VIRTUAL_WIDTH//2 - 150, VIRTUAL_HEIGHT//2 + 80, 300, 70)
+        is_hover = btn_rect.collidepoint(gs.mouse_pos)
+        draw_button(surface, btn_rect, "VOLTAR AO MENU", vs.font_ui, GOLD_COLOR, hover=is_hover)
 
 def draw_text_box(surf, text, font, color, rect):
     words = text.split(' '); lines = []; curr = []
@@ -450,7 +464,7 @@ def handle_input(gs, ins, scale):
         if gs.state == "MENU":
             if event.type == pygame.MOUSEBUTTONDOWN:
                 mx, my = [p // scale for p in event.pos]
-                btn_rect = pygame.Rect(VIRTUAL_WIDTH//2 - 150, VIRTUAL_HEIGHT//2 + 60, 300, 70)
+                btn_rect = pygame.Rect(VIRTUAL_WIDTH//2 - 150, VIRTUAL_HEIGHT//2 + 150, 300, 70)
                 if btn_rect.collidepoint(mx, my): 
                     gs.__init__(); gs.state = "PLAYING"; ins.reset_pos()
             continue
@@ -458,7 +472,7 @@ def handle_input(gs, ins, scale):
         if gs.state in ["GAMEOVER", "VICTORY"]:
             if event.type == pygame.MOUSEBUTTONDOWN:
                 mx, my = [p // scale for p in event.pos]
-                btn_rect = pygame.Rect(VIRTUAL_WIDTH//2 - 150, VIRTUAL_HEIGHT//2 + 60, 300, 70)
+                btn_rect = pygame.Rect(VIRTUAL_WIDTH//2 - 150, VIRTUAL_HEIGHT//2 + 80, 300, 70)
                 if btn_rect.collidepoint(mx, my): 
                     gs.__init__(); gs.state = "MENU"; ins.reset_pos()
             continue
