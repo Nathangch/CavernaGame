@@ -103,10 +103,30 @@ class Particle:
         s = pygame.Surface((self.size*2, self.size*2), pygame.SRCALPHA)
         pygame.draw.circle(s, (*self.color, self.alpha // 2), (self.size, self.size), self.size)
         surface.blit(s, (int(self.x - self.size), int(self.y - self.size)))
+def draw_angel(surf, x, y, size, time_val):
+    # Wings
+    wing_w, wing_h = size * 1.5, size
+    wing_y_off = math.sin(time_val * 0.1) * 10
+    # Left Wing
+    l_wing = pygame.Surface((wing_w*2, wing_h*2), pygame.SRCALPHA)
+    pygame.draw.ellipse(l_wing, (255, 255, 255, 100), (0, 0, wing_w, wing_h))
+    surf.blit(pygame.transform.rotate(l_wing, 30), (x - size*2, y - size + wing_y_off))
+    # Right Wing
+    r_wing = pygame.Surface((wing_w*2, wing_h*2), pygame.SRCALPHA)
+    pygame.draw.ellipse(r_wing, (255, 255, 255, 100), (0, 0, wing_w, wing_h))
+    surf.blit(pygame.transform.rotate(r_wing, -30), (x + size//2, y - size + wing_y_off))
+    
+    # Body (White Silhouette)
+    pygame.draw.circle(surf, (255, 255, 255), (x, y - size), size // 3) # Head
+    pygame.draw.ellipse(surf, (255, 255, 255), (x - size // 2, y - size // 1.5, size, size * 1.5)) # Body
+    
+    # Halo
+    halo_y = y - size - 15 + math.sin(time_val * 0.05) * 5
+    pygame.draw.ellipse(surf, GOLD_COLOR, (x - size//3, halo_y, size//1.5, 6), width=2)
 
 class GameState:
     def __init__(self):
-        self.state = "MENU" # MENU, PLAYING, GAMEOVER, VICTORY
+        self.state = "MENU" # MENU, STORY, PLAYING, GAMEOVER, VICTORY
         self.level = 1
         self.score_to_level_up = 50
         self.cards_processed = 0
@@ -217,7 +237,7 @@ def update(gs, ins, scale):
     if gs.display_score < gs.score: gs.display_score += 1
     elif gs.display_score > gs.score: gs.display_score -= 1
     gs.breathing_angle += 0.05; gs.time_counter += 1
-    if gs.state == "MENU" and gs.time_counter % 2 == 0:
+    if gs.state in ["MENU", "STORY"] and gs.time_counter % 2 == 0:
         gs.narrative_chars += 1
     if gs.card_entry_y > ins.start_pos[1]: gs.card_entry_y -= (gs.card_entry_y - ins.start_pos[1]) * 0.1
     if random.random() < 0.2:
@@ -327,21 +347,30 @@ def draw(surface, gs, ins, vs):
     for p in gs.particles: p.draw(surface)
     
     if gs.state == "MENU":
-        draw_text_centered_shadow(surface, "HEAVEN OR HELL", vs.font_feedback, HEAVEN_GLOW, VIRTUAL_HEIGHT//2 - 160)
-        draw_text_centered_shadow(surface, "JULGAMENTO FINAL", vs.font_ui, (200, 200, 210), VIRTUAL_HEIGHT//2 - 100)
+        draw_text_centered_shadow(surface, "HEAVEN OR HELL", vs.font_feedback, HEAVEN_GLOW, VIRTUAL_HEIGHT//2 - 100)
+        draw_text_centered_shadow(surface, "JULGAMENTO FINAL", vs.font_ui, (200, 200, 210), VIRTUAL_HEIGHT//2 - 40)
+        btn_rect = pygame.Rect(VIRTUAL_WIDTH//2 - 150, VIRTUAL_HEIGHT//2 + 60, 300, 70)
+        is_hover = btn_rect.collidepoint(gs.mouse_pos)
+        draw_button(surface, btn_rect, "COMEÇAR", vs.font_ui, GOLD_COLOR, hover=is_hover)
+        return
+
+    if gs.state == "STORY":
+        # Draw Angel above the dialogue box
+        draw_angel(surface, VIRTUAL_WIDTH//2, VIRTUAL_HEIGHT//2 - 120, 60, gs.time_counter)
         
         full_text = "Você foi escolhido para julgar quem irá para o céu e inferno, faça corretamente pois assim você também poderá reencarnar, caso falhe você irá para o inferno"
         visible_text = full_text[:gs.narrative_chars]
         
         # Narrator Box Style
-        box_rect = pygame.Rect(VIRTUAL_WIDTH//2 - 270, VIRTUAL_HEIGHT//2 - 40, 540, 160)
+        box_rect = pygame.Rect(VIRTUAL_WIDTH//2 - 270, VIRTUAL_HEIGHT//2 + 40, 540, 160)
         pygame.draw.rect(surface, (0, 0, 0, 180), box_rect, border_radius=12)
         pygame.draw.rect(surface, GOLD_COLOR, box_rect, width=2, border_radius=12)
         draw_text_box(surface, visible_text, vs.font_content, (220, 220, 230), box_rect.inflate(-40, -40))
 
-        btn_rect = pygame.Rect(VIRTUAL_WIDTH//2 - 150, VIRTUAL_HEIGHT//2 + 150, 300, 70)
+        btn_rect = pygame.Rect(VIRTUAL_WIDTH//2 - 150, VIRTUAL_HEIGHT//2 + 220, 300, 60)
         is_hover = btn_rect.collidepoint(gs.mouse_pos)
-        draw_button(surface, btn_rect, "COMEÇAR", vs.font_ui, GOLD_COLOR, hover=is_hover)
+        prompt = "VEREDITO..." if gs.narrative_chars >= len(full_text) else "PULAR"
+        draw_button(surface, btn_rect, prompt, vs.font_ui, GOLD_COLOR, hover=is_hover)
         return
 
     cx = ins.card_pos[0] + CARD_WIDTH // 2
@@ -464,8 +493,16 @@ def handle_input(gs, ins, scale):
         if gs.state == "MENU":
             if event.type == pygame.MOUSEBUTTONDOWN:
                 mx, my = [p // scale for p in event.pos]
-                btn_rect = pygame.Rect(VIRTUAL_WIDTH//2 - 150, VIRTUAL_HEIGHT//2 + 150, 300, 70)
+                btn_rect = pygame.Rect(VIRTUAL_WIDTH//2 - 150, VIRTUAL_HEIGHT//2 + 60, 300, 70)
                 if btn_rect.collidepoint(mx, my): 
+                    gs.state = "STORY"; gs.narrative_chars = 0
+            continue
+
+        if gs.state == "STORY":
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                mx, my = [p // scale for p in event.pos]
+                btn_rect = pygame.Rect(VIRTUAL_WIDTH//2 - 150, VIRTUAL_HEIGHT//2 + 220, 300, 60)
+                if btn_rect.collidepoint(mx, my):
                     gs.__init__(); gs.state = "PLAYING"; ins.reset_pos()
             continue
 
