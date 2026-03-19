@@ -62,35 +62,28 @@ CRIMES = {
     "tráfico de influências": 7, "negligência criminosa": 8, "perturbação do sossego": 2
 }
 
-def generate_random_card(difficulty=0):
+def generate_random_card(level):
     nome = random.choice(NAMES)
-    min_actions = 1 + (difficulty // 5)
-    max_actions = 3 + (difficulty // 10)
-    chance = random.random()
-    if chance < 0.05: # Hero
-        num_boas, num_crimes = 5, 0
-    elif chance < 0.10: # Villain
-        num_boas, num_crimes = 0, 5
-    else:
-        num_boas = random.randint(min_actions, max_actions)
-        num_crimes = random.randint(min_actions, max_actions)
-    gd_keys = list(GOOD_DEEDS.keys())
-    cr_keys = list(CRIMES.keys())
-    boas_acoes = random.sample(gd_keys, min(num_boas, len(gd_keys)))
+    gender = NAMES_GENDER.get(nome, "M")
+    
+    # Difficulty Scaling: item count increases with level
+    num_items = min(6, 1 + (level // 4))
+    num_deeds = random.randint(1, num_items)
+    num_crimes = random.randint(1, num_items)
+    
+    # Early levels: ensure a clear winner for "easier" judgment
+    if level < 5:
+        if random.random() < 0.5: num_deeds = max(num_deeds, num_crimes + 2)
+        else: num_crimes = max(num_crimes, num_deeds + 2)
+
+    gd_keys = list(GOOD_DEEDS.keys()); cr_keys = list(CRIMES.keys())
+    boas_acoes = random.sample(gd_keys, min(num_deeds, len(gd_keys)))
     crimes = random.sample(cr_keys, min(num_crimes, len(cr_keys)))
     
-    # Spirit color based on deeds vs crimes balance
     balance = (len(boas_acoes) - len(crimes)) / 5.0
     r = int(150 + balance * 100); g = int(180 + balance * 70); b = int(210 + balance * 45)
     r, g, b = [max(0, min(255, c)) for c in (r, g, b)]
-    
-    return {
-        "nome": nome, 
-        "boas_acoes": boas_acoes, 
-        "crimes": crimes, 
-        "spirit_color": (r, g, b),
-        "gender": NAMES_GENDER.get(nome, "M")
-    }
+    return {"nome": nome, "gender": gender, "boas_acoes": boas_acoes, "crimes": crimes, "spirit_color": (r, g, b)}
 
 class Particle:
     def __init__(self, x, y, side="hell"):
@@ -113,9 +106,11 @@ class Particle:
 
 class GameState:
     def __init__(self):
-        self.state = "MENU" # MENU, PLAYING, GAMEOVER
+        self.state = "MENU" # MENU, PLAYING, GAMEOVER, VICTORY
+        self.level = 1
+        self.score_to_level_up = 50
         self.cards_processed = 0
-        self.cards_list = [generate_random_card(0) for _ in range(10)]
+        self.cards_list = [generate_random_card(self.level) for _ in range(10)]
         self.current_card_index, self.score, self.lives = 0, 0, 3
         self.combo, self.max_combo = 0, 0
         self.feedback_message, self.feedback_timer = "", 0
@@ -124,15 +119,14 @@ class GameState:
         self.history, self.shake_intensity = [], 0
         self.flash_alpha, self.flash_color = 0, (255, 255, 255)
         self.card_entry_y, self.particles, self.breathing_angle = 600, [], 0
-        # UI Polish States
         self.score_pop_timer, self.life_flash_timer = 0, 0
         self.display_score = 0
         self.time_counter = 0
 
     def get_current_card(self):
-        if self.current_card_index < len(self.cards_list):
-            return self.cards_list[self.current_card_index]
-        return None
+        if self.current_card_index >= len(self.cards_list):
+            self.cards_list.extend([generate_random_card(self.level) for _ in range(5)])
+        return self.cards_list[self.current_card_index]
 
     def next_card(self):
         self.decision_state, self.decision_start_time = None, 0
@@ -210,8 +204,8 @@ def process_decision(gs, ins, auto_fail=False):
     else: ins.reset_pos()
 
 def update(gs, ins, scale):
-    if gs.state != "PLAYING" and gs.state != "MENU": # Let particles run in menu
-        if gs.state == "GAMEOVER": pass 
+    if gs.state != "PLAYING" and gs.state != "MENU":
+        if gs.state in ["GAMEOVER", "VICTORY"]: pass 
         else: return
     if gs.shake_intensity > 0: gs.shake_intensity -= 1
     if gs.flash_alpha > 0: gs.flash_alpha -= 5
@@ -328,9 +322,13 @@ def draw(surface, gs, ins, vs):
     for p in gs.particles: p.draw(surface)
     
     if gs.state == "MENU":
-        draw_text_centered_shadow(surface, "HEAVEN OR HELL", vs.font_feedback, HEAVEN_GLOW, VIRTUAL_HEIGHT//2 - 100)
-        draw_text_centered_shadow(surface, "JULGAMENTO FINAL", vs.font_ui, (200, 200, 210), VIRTUAL_HEIGHT//2 - 40)
-        btn_rect = pygame.Rect(VIRTUAL_WIDTH//2 - 150, VIRTUAL_HEIGHT//2 + 60, 300, 70)
+        draw_text_centered_shadow(surface, "HEAVEN OR HELL", vs.font_feedback, HEAVEN_GLOW, VIRTUAL_HEIGHT//2 - 140)
+        draw_text_centered_shadow(surface, "JULGAMENTO FINAL", vs.font_ui, (200, 200, 210), VIRTUAL_HEIGHT//2 - 80)
+        
+        narrative = "Você foi escolhido para julgar quem irá para o céu e inferno, faça corretamente pois assim você também poderá reencarnar, caso falhe você irá para o inferno"
+        draw_text_box(surface, narrative, vs.font_content, (180, 180, 190), pygame.Rect(VIRTUAL_WIDTH//2 - 250, VIRTUAL_HEIGHT//2 - 40, 500, 150))
+
+        btn_rect = pygame.Rect(VIRTUAL_WIDTH//2 - 150, VIRTUAL_HEIGHT//2 + 100, 300, 70)
         draw_button(surface, btn_rect, "COMEÇAR", vs.font_ui, GOLD_COLOR)
         return
 
@@ -412,6 +410,7 @@ def draw(surface, gs, ins, vs):
 
     # Timer & Overlays (Unchanged Core)
     if gs.state == "PLAYING":
+        draw_text_centered_shadow(surface, f"FASE {gs.level}/20", vs.font_content, (200,200,200), 110)
         t_w = VIRTUAL_WIDTH - 400; ratio = max(0, 1 - ((pygame.time.get_ticks() - gs.timer_start) / gs.timer_max))
         pygame.draw.rect(surface, (20,20,25), (VIRTUAL_WIDTH//2 - t_w//2, 90, t_w, 8), border_radius=4)
         pygame.draw.rect(surface, (255, 215, 0) if ratio > 0.3 else (255, 50, 50), (VIRTUAL_WIDTH//2 - t_w//2, 90, int(t_w * ratio), 8), border_radius=4)
@@ -421,10 +420,17 @@ def draw(surface, gs, ins, vs):
     
     if gs.state == "GAMEOVER":
         ov = pygame.Surface((VIRTUAL_WIDTH,VIRTUAL_HEIGHT), pygame.SRCALPHA); ov.fill((0,0,0,230)); surface.blit(ov, (0,0))
-        draw_text_centered_shadow(surface, "VEREDITO FINAL", vs.font_feedback, (255,255,255), VIRTUAL_HEIGHT//2-100)
-        draw_text_centered_shadow(surface, f"PONTUAÇÃO: {gs.score}", vs.font_ui, GOLD_COLOR, VIRTUAL_HEIGHT//2 - 20)
+        draw_text_centered_shadow(surface, "JOGADO ÀS TREVAS", vs.font_feedback, (255,50,50), VIRTUAL_HEIGHT//2-100)
+        draw_text_centered_shadow(surface, f"Você falhou na fase {gs.level}. Destino: Inferno.", vs.font_content, (200,200,200), VIRTUAL_HEIGHT//2 - 20)
         btn_rect = pygame.Rect(VIRTUAL_WIDTH//2 - 150, VIRTUAL_HEIGHT//2 + 60, 300, 70)
         draw_button(surface, btn_rect, "MENU PRINCIPAL", vs.font_ui, (200, 200, 210))
+
+    if gs.state == "VICTORY":
+        ov = pygame.Surface((VIRTUAL_WIDTH,VIRTUAL_HEIGHT), pygame.SRCALPHA); ov.fill((0,30,60,230)); surface.blit(ov, (0,0))
+        draw_text_centered_shadow(surface, "REENCARNAÇÃO", vs.font_feedback, HEAVEN_GLOW, VIRTUAL_HEIGHT//2-100)
+        draw_text_centered_shadow(surface, "Você provou ser um juiz justo. A vida te chama novamente.", vs.font_content, (200,255,200), VIRTUAL_HEIGHT//2 - 20)
+        btn_rect = pygame.Rect(VIRTUAL_WIDTH//2 - 150, VIRTUAL_HEIGHT//2 + 60, 300, 70)
+        draw_button(surface, btn_rect, "VOLTAR AO MENU", vs.font_ui, GOLD_COLOR)
 
 def draw_text_box(surf, text, font, color, rect):
     words = text.split(' '); lines = []; curr = []
@@ -449,7 +455,7 @@ def handle_input(gs, ins, scale):
                     gs.__init__(); gs.state = "PLAYING"; ins.reset_pos()
             continue
 
-        if gs.state == "GAMEOVER":
+        if gs.state in ["GAMEOVER", "VICTORY"]:
             if event.type == pygame.MOUSEBUTTONDOWN:
                 mx, my = [p // scale for p in event.pos]
                 btn_rect = pygame.Rect(VIRTUAL_WIDTH//2 - 150, VIRTUAL_HEIGHT//2 + 60, 300, 70)
