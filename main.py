@@ -2,6 +2,7 @@ import pygame
 import random
 import sys
 import math
+import asyncio
 
 # --- Constants ---
 SCREEN_WIDTH = 800
@@ -464,12 +465,14 @@ def handle_input(gs, ins, scale):
         elif event.type == pygame.MOUSEBUTTONUP and ins.dragging:
             ins.dragging = False; process_decision(gs, ins)
 
-def main():
+async def main():
     pygame.init(); real = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT)); virt = pygame.Surface((VIRTUAL_WIDTH, VIRTUAL_HEIGHT))
     scale = SCREEN_WIDTH // VIRTUAL_WIDTH; pygame.display.set_caption("Heaven or Hell - Judgment Day"); clock = pygame.time.Clock()
     gs, ins, vs = GameState(), InteractionState(), VisualState()
     while True:
         handle_input(gs, ins, scale); update(gs, ins, scale); draw(virt, gs, ins, vs)
         pygame.transform.scale(virt, (SCREEN_WIDTH, SCREEN_HEIGHT), real); pygame.display.flip(); clock.tick(FPS)
+        await asyncio.sleep(0) # Yield control to the browser
 
-if __name__ == "__main__": main()
+if __name__ == "__main__":
+    asyncio.run(main())
