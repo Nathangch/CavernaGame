@@ -372,11 +372,6 @@ def draw_shadowed_text(surf, text, font, color, pos):
     s = font.render(text, True, color); sh = font.render(text, True, (0,0,0))
     surf.blit(sh, (pos[0]+2, pos[1]+2)); surf.blit(s, pos)
 
-def draw_shadowed_text(surf, text, font, color, pos):
-    if not text: return
-    s = font.render(text, True, color); sh = font.render(text, True, (0,0,0))
-    surf.blit(sh, (pos[0]+2, pos[1]+2)); surf.blit(s, pos)
-
 def draw_main_menu(surface, gs, vs):
     draw_text_centered_shadow(surface, "HEAVEN OR HELL", vs.font_feedback, HEAVEN_GLOW, VIRTUAL_HEIGHT//2 - 120)
     draw_text_centered_shadow(surface, "JULGAMENTO FINAL", vs.font_ui, (200, 200, 210), VIRTUAL_HEIGHT//2 - 60)
