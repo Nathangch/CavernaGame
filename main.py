@@ -234,19 +234,28 @@ def process_decision(gs, ins, auto_fail=False):
     else: ins.reset_pos()
 
 def update(gs, ins, scale):
-    if gs.state != "PLAYING" and gs.state != "MENU":
-        if gs.state in ["GAMEOVER", "VICTORY"]: pass 
-        else: return
+    gs.time_counter += 1
+    gs.breathing_angle += 0.05
+    
+    # Narrative/Typewriter logic
+    if gs.state in ["MENU", "STORY"] and gs.time_counter % 2 == 0:
+        gs.narrative_chars += 1
+        
+    # Visual effects updates
     if gs.shake_intensity > 0: gs.shake_intensity -= 1
     if gs.flash_alpha > 0: gs.flash_alpha -= 5
     if gs.score_pop_timer > 0: gs.score_pop_timer -= 1
     if gs.life_flash_timer > 0: gs.life_flash_timer -= 1
+    
+    # Gameplay skip for non-playing states
+    if gs.state != "PLAYING":
+        return
+        
     if gs.display_score < gs.score: gs.display_score += 1
     elif gs.display_score > gs.score: gs.display_score -= 1
-    gs.breathing_angle += 0.05; gs.time_counter += 1
-    if gs.state in ["MENU", "STORY"] and gs.time_counter % 2 == 0:
-        gs.narrative_chars += 1
+    
     if gs.card_entry_y > ins.start_pos[1]: gs.card_entry_y -= (gs.card_entry_y - ins.start_pos[1]) * 0.1
+    
     if random.random() < 0.2:
         gs.particles.append(Particle(random.randint(0, VIRTUAL_WIDTH//4), random.randint(VIRTUAL_HEIGHT-50, VIRTUAL_HEIGHT), "hell"))
         gs.particles.append(Particle(random.randint(VIRTUAL_WIDTH*3//4, VIRTUAL_WIDTH), random.randint(10, 100), "heaven"))
@@ -469,7 +478,8 @@ def draw(surface, gs, ins, vs):
         
         # Base Background
         s = pygame.Surface((rect.width, rect.height), pygame.SRCALPHA)
-        pygame.draw.rect(s, (*(HELL_AREA_COLOR if side=="hell" else HEAVEN_AREA_COLOR), 120), (0,0,rect.width, rect.height))
+        ac = HELL_AREA_COLOR if side=="hell" else HEAVEN_AREA_COLOR
+        pygame.draw.rect(s, (ac[0], ac[1], ac[2], 120), (0,0,rect.width, rect.height))
         surface.blit(s, (x, 0))
         
         # Specific Thematic Effects
@@ -484,7 +494,8 @@ def draw(surface, gs, ins, vs):
         glow_a = int(max(0, 1-dist*2) * 100)
         if glow_a > 0:
             gsurf = pygame.Surface((rect.width, rect.height), pygame.SRCALPHA)
-            pygame.draw.rect(gsurf, (*(HELL_GLOW if side=="hell" else HEAVEN_GLOW), glow_a), (0,0,rect.width,rect.height), width=4)
+            gc = HELL_GLOW if side=="hell" else HEAVEN_GLOW
+            pygame.draw.rect(gsurf, (gc[0], gc[1], gc[2], glow_a), (0,0,rect.width,rect.height), width=4)
             surface.blit(gsurf, (x,0))
         
         text_color = (255,100,100) if side=="hell" else (180,240,255)
