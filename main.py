@@ -340,55 +340,94 @@ def draw_button(surf, rect, text, font, color, hover=False):
     surf.blit(s, (rect.centerx - s.get_width()//2, rect.centery - s.get_height()//2))
 
 def draw_text_centered_shadow(surf, text, font, color, y, x_center=VIRTUAL_WIDTH//2):
+    if not text: return
     s = font.render(text, True, color); sh = font.render(text, True, (0,0,0))
     surf.blit(sh, (x_center - s.get_width()//2 + 2, y + 2)); surf.blit(s, (x_center - s.get_width()//2, y))
 
+def draw_text_wrapped(surf, text, font, color, rect, line_spacing=28):
+    words = text.split(' ')
+    lines = []; curr_line = ""
+    for w in words:
+        if font.size(curr_line + w)[0] < rect.width: curr_line += w + " "
+        else: lines.append(curr_line.strip()); curr_line = w + " "
+    lines.append(curr_line.strip())
+    
+    y = rect.top
+    for l in lines:
+        if y + font.get_linesize() > rect.bottom: break
+        draw_text_centered_shadow(surf, l, font, color, y, x_center=rect.centerx)
+        y += line_spacing
+
 def draw_shadowed_text(surf, text, font, color, pos):
-    surf.blit(font.render(text, True, (0,0,0)), (pos[0]+2, pos[1]+2)); surf.blit(font.render(text, True, color), pos)
+    if not text: return
+    s = font.render(text, True, color); sh = font.render(text, True, (0,0,0))
+    surf.blit(sh, (pos[0]+2, pos[1]+2)); surf.blit(s, pos)
+
+def draw_shadowed_text(surf, text, font, color, pos):
+    if not text: return
+    s = font.render(text, True, color); sh = font.render(text, True, (0,0,0))
+    surf.blit(sh, (pos[0]+2, pos[1]+2)); surf.blit(s, pos)
+
+def draw_main_menu(surface, gs, vs):
+    draw_text_centered_shadow(surface, "HEAVEN OR HELL", vs.font_feedback, HEAVEN_GLOW, VIRTUAL_HEIGHT//2 - 120)
+    draw_text_centered_shadow(surface, "JULGAMENTO FINAL", vs.font_ui, (200, 200, 210), VIRTUAL_HEIGHT//2 - 60)
+    start_btn = pygame.Rect(VIRTUAL_WIDTH//2 - 140, VIRTUAL_HEIGHT//2 + 20, 280, 60)
+    how_btn = pygame.Rect(VIRTUAL_WIDTH//2 - 140, VIRTUAL_HEIGHT//2 + 100, 280, 60)
+    is_hover_start = start_btn.collidepoint(gs.mouse_pos); is_hover_how = how_btn.collidepoint(gs.mouse_pos)
+    draw_button(surface, start_btn, "COMEÇAR", vs.font_ui, GOLD_COLOR, hover=is_hover_start)
+    draw_button(surface, how_btn, "COMO JOGAR", vs.font_ui, (200, 200, 210), hover=is_hover_how)
 
 def draw(surface, gs, ins, vs):
     off_x, off_y = 0, 0
     if gs.shake_intensity > 0:
-        off_x, off_y = [random.randint(-gs.shake_intensity, gs.shake_intensity) for _ in range(2)]
+        off_x = random.randint(-gs.shake_intensity, gs.shake_intensity)
+        off_y = random.randint(-gs.shake_intensity, gs.shake_intensity)
     surface.blit(vs.bg_surf, (off_x, off_y))
     for p in gs.particles: p.draw(surface)
     
     if gs.state == "MENU":
-        draw_text_centered_shadow(surface, "HEAVEN OR HELL", vs.font_feedback, HEAVEN_GLOW, VIRTUAL_HEIGHT//2 - 100)
-        draw_text_centered_shadow(surface, "JULGAMENTO FINAL", vs.font_ui, (200, 200, 210), VIRTUAL_HEIGHT//2 - 40)
-        btn_rect = pygame.Rect(VIRTUAL_WIDTH//2 - 150, VIRTUAL_HEIGHT//2 + 60, 300, 70)
-        is_hover = btn_rect.collidepoint(gs.mouse_pos)
-        draw_button(surface, btn_rect, "COMEÇAR", vs.font_ui, GOLD_COLOR, hover=is_hover)
+        draw_main_menu(surface, gs, vs)
         return
 
     if gs.state == "STORY":
-        # Background dims slightly to focus on story
-        ov = pygame.Surface((VIRTUAL_WIDTH,VIRTUAL_HEIGHT), pygame.SRCALPHA); ov.fill((0,0,0,100)); surface.blit(ov, (0,0))
+        # Background dims for story focus
+        ov = pygame.Surface((VIRTUAL_WIDTH,VIRTUAL_HEIGHT), pygame.SRCALPHA); ov.fill((0,0,0,160)); surface.blit(ov, (0,0))
+        draw_angel(surface, VIRTUAL_WIDTH//2, VIRTUAL_HEIGHT//2 - 100, 60, gs.time_counter)
         
-        draw_angel(surface, VIRTUAL_WIDTH//2, VIRTUAL_HEIGHT//2 - 60, 60, gs.time_counter)
+        narrative = [
+            "Saudações, Juiz Celestial. O equilíbrio entre o Éter e o Abismo está em tuas mãos.",
+            "Cada alma que cruza este portal carrega o peso de seus atos terrenos.",
+            "Julga com sabedoria: teu dever determinará quem merece a glória ou o fogo.",
+            "Falhar em teu julgamento selará também o teu próprio destino eterno."
+        ]
+        manual = [
+            "MANUAL: Arraste a alma para a DIREITA (CÉU) ou ESQUERDA (INFERNO).",
+            "Analise os crimes e as virtudes para decidir o destino corretamente.",
+            "Cada 50 pontos você sobe de fase. O jogo termina na fase 20."
+        ]
         
-        full_text = "Você foi escolhido para julgar quem irá para o céu e inferno. Faça por merecer a sua reencarnação, ou o fogo eterno será seu destino."
-        if gs.narrative_chars == 0: gs.narrative_chars = 1 # Force start
-        visible_text = full_text[:int(gs.narrative_chars)]
+        full_text = " ".join(narrative)
+        chars_to_show = int(gs.narrative_chars)
+        visible_text = str(full_text)[:chars_to_show]
         
-        box_rect = pygame.Rect(VIRTUAL_WIDTH//2 - 300, VIRTUAL_HEIGHT//2 + 50, 600, 140)
-        pygame.draw.rect(surface, (10, 10, 20, 230), box_rect, border_radius=15)
+        box_rect = pygame.Rect(VIRTUAL_WIDTH//2 - 320, VIRTUAL_HEIGHT//2 + 20, 640, 230)
+        pygame.draw.rect(surface, (15, 15, 30, 250), box_rect, border_radius=15)
         pygame.draw.rect(surface, GOLD_COLOR, box_rect, width=3, border_radius=15)
         
-        # Simpler text rendering to ensure visibility
-        words = visible_text.split(' ')
-        lines = []; line = ""
-        for w in words:
-            if vs.font_content.size(line + w)[0] < box_rect.width - 60: line += w + " "
-            else: lines.append(line); line = w + " "
-        lines.append(line)
+        # Wrapped story text
+        if visible_text.strip():
+            draw_text_wrapped(surface, visible_text, vs.font_content, (245, 245, 255), box_rect.inflate(-60, -60))
         
-        for i, l in enumerate(lines):
-            draw_text_centered_shadow(surface, l.strip(), vs.font_content, (240, 240, 255), box_rect.top + 30 + i * 30)
+        # Manual appears at end
+        if chars_to_show >= len(full_text):
+            y_m = box_rect.bottom - 80
+            for m_l in manual:
+                draw_text_centered_shadow(surface, m_l, vs.font_content, GOLD_COLOR, y_m, x_center=box_rect.centerx)
+                y_m += 22
 
-        btn_rect = pygame.Rect(VIRTUAL_WIDTH//2 - 120, VIRTUAL_HEIGHT//2 + 210, 240, 50)
+        btn_rect = pygame.Rect(VIRTUAL_WIDTH//2 - 120, VIRTUAL_HEIGHT//2 + 260, 240, 50)
         is_hover = btn_rect.collidepoint(gs.mouse_pos)
-        prompt = "INICIAR" if len(visible_text) >= len(full_text) else "PULAR"
+        prompt = "INICIAR" if chars_to_show >= len(full_text) else "PULAR"
         draw_button(surface, btn_rect, prompt, vs.font_ui, GOLD_COLOR, hover=is_hover)
         return
 
@@ -512,15 +551,18 @@ def handle_input(gs, ins, scale):
         if gs.state == "MENU":
             if event.type == pygame.MOUSEBUTTONDOWN:
                 mx, my = [p // scale for p in event.pos]
-                btn_rect = pygame.Rect(VIRTUAL_WIDTH//2 - 150, VIRTUAL_HEIGHT//2 + 60, 300, 70)
-                if btn_rect.collidepoint(mx, my): 
+                start_btn = pygame.Rect(VIRTUAL_WIDTH//2 - 140, VIRTUAL_HEIGHT//2 + 20, 280, 60)
+                how_btn = pygame.Rect(VIRTUAL_WIDTH//2 - 140, VIRTUAL_HEIGHT//2 + 100, 280, 60)
+                if start_btn.collidepoint(mx, my): 
                     gs.state = "STORY"; gs.narrative_chars = 0
+                elif how_btn.collidepoint(mx, my):
+                    gs.state = "STORY"; gs.narrative_chars = 999
             continue
 
         if gs.state == "STORY":
             if event.type == pygame.MOUSEBUTTONDOWN:
                 mx, my = [p // scale for p in event.pos]
-                btn_rect = pygame.Rect(VIRTUAL_WIDTH//2 - 120, VIRTUAL_HEIGHT//2 + 210, 240, 50)
+                btn_rect = pygame.Rect(VIRTUAL_WIDTH//2 - 120, VIRTUAL_HEIGHT//2 + 260, 240, 50)
                 if btn_rect.collidepoint(mx, my):
                     gs.__init__(); gs.state = "PLAYING"; ins.reset_pos()
             continue
