@@ -104,25 +104,32 @@ class Particle:
         pygame.draw.circle(s, (*self.color, self.alpha // 2), (self.size, self.size), self.size)
         surface.blit(s, (int(self.x - self.size), int(self.y - self.size)))
 def draw_angel(surf, x, y, size, time_val):
-    # Wings
-    wing_w, wing_h = size * 1.5, size
-    wing_y_off = math.sin(time_val * 0.1) * 10
-    # Left Wing
-    l_wing = pygame.Surface((wing_w*2, wing_h*2), pygame.SRCALPHA)
-    pygame.draw.ellipse(l_wing, (255, 255, 255, 100), (0, 0, wing_w, wing_h))
-    surf.blit(pygame.transform.rotate(l_wing, 30), (x - size*2, y - size + wing_y_off))
-    # Right Wing
-    r_wing = pygame.Surface((wing_w*2, wing_h*2), pygame.SRCALPHA)
-    pygame.draw.ellipse(r_wing, (255, 255, 255, 100), (0, 0, wing_w, wing_h))
-    surf.blit(pygame.transform.rotate(r_wing, -30), (x + size//2, y - size + wing_y_off))
+    # Wing animation
+    wing_flap = math.sin(time_val * 0.1) * 15
     
-    # Body (White Silhouette)
-    pygame.draw.circle(surf, (255, 255, 255), (x, y - size), size // 3) # Head
-    pygame.draw.ellipse(surf, (255, 255, 255), (x - size // 2, y - size // 1.5, size, size * 1.5)) # Body
+    # Draw Wings (Polygons for better stability)
+    for side in [-1, 1]: # -1 for left, 1 for right
+        wing_pts = [
+            (x + 5 * side, y - size),
+            (x + (size + 10) * side, y - size * 1.8 + wing_flap),
+            (x + (size + 30) * side, y - size * 0.5 + wing_flap),
+            (x + 5 * side, y - size * 0.2)
+        ]
+        pygame.draw.polygon(surf, (240, 240, 255, 160), wing_pts)
+        pygame.draw.polygon(surf, (255, 255, 255), wing_pts, width=2)
     
-    # Halo
-    halo_y = y - size - 15 + math.sin(time_val * 0.05) * 5
-    pygame.draw.ellipse(surf, GOLD_COLOR, (x - size//3, halo_y, size//1.5, 6), width=2)
+    # Body (White Silhouette) - More cohesive shape
+    pygame.draw.circle(surf, (255, 255, 255), (x, int(y - size * 1.1)), size // 3) # Head
+    body_rect = pygame.Rect(x - size // 2, y - size, size, size * 1.2)
+    pygame.draw.ellipse(surf, (255, 255, 255), body_rect) # Robe
+    
+    # Halo (Glowing effect)
+    halo_y = y - size * 1.45 + math.sin(time_val * 0.05) * 5
+    pygame.draw.ellipse(surf, (255, 255, 200), (x - size//2, halo_y, size, 10), width=3)
+    # Subtle glow
+    glow_s = pygame.Surface((size*2.5, 30), pygame.SRCALPHA)
+    pygame.draw.ellipse(glow_s, (255, 255, 0, 40), (0, 0, size*2.5, 30))
+    surf.blit(glow_s, (x - size*1.25, halo_y - 10))
 
 class GameState:
     def __init__(self):
@@ -355,21 +362,33 @@ def draw(surface, gs, ins, vs):
         return
 
     if gs.state == "STORY":
-        # Draw Angel above the dialogue box
-        draw_angel(surface, VIRTUAL_WIDTH//2, VIRTUAL_HEIGHT//2 - 120, 60, gs.time_counter)
+        # Background dims slightly to focus on story
+        ov = pygame.Surface((VIRTUAL_WIDTH,VIRTUAL_HEIGHT), pygame.SRCALPHA); ov.fill((0,0,0,100)); surface.blit(ov, (0,0))
         
-        full_text = "Você foi escolhido para julgar quem irá para o céu e inferno, faça corretamente pois assim você também poderá reencarnar, caso falhe você irá para o inferno"
-        visible_text = full_text[:gs.narrative_chars]
+        draw_angel(surface, VIRTUAL_WIDTH//2, VIRTUAL_HEIGHT//2 - 60, 60, gs.time_counter)
         
-        # Narrator Box Style
-        box_rect = pygame.Rect(VIRTUAL_WIDTH//2 - 270, VIRTUAL_HEIGHT//2 + 40, 540, 160)
-        pygame.draw.rect(surface, (0, 0, 0, 180), box_rect, border_radius=12)
-        pygame.draw.rect(surface, GOLD_COLOR, box_rect, width=2, border_radius=12)
-        draw_text_box(surface, visible_text, vs.font_content, (220, 220, 230), box_rect.inflate(-40, -40))
+        full_text = "Você foi escolhido para julgar quem irá para o céu e inferno. Faça por merecer a sua reencarnação, ou o fogo eterno será seu destino."
+        if gs.narrative_chars == 0: gs.narrative_chars = 1 # Force start
+        visible_text = full_text[:int(gs.narrative_chars)]
+        
+        box_rect = pygame.Rect(VIRTUAL_WIDTH//2 - 300, VIRTUAL_HEIGHT//2 + 50, 600, 140)
+        pygame.draw.rect(surface, (10, 10, 20, 230), box_rect, border_radius=15)
+        pygame.draw.rect(surface, GOLD_COLOR, box_rect, width=3, border_radius=15)
+        
+        # Simpler text rendering to ensure visibility
+        words = visible_text.split(' ')
+        lines = []; line = ""
+        for w in words:
+            if vs.font_content.size(line + w)[0] < box_rect.width - 60: line += w + " "
+            else: lines.append(line); line = w + " "
+        lines.append(line)
+        
+        for i, l in enumerate(lines):
+            draw_text_centered_shadow(surface, l.strip(), vs.font_content, (240, 240, 255), box_rect.top + 30 + i * 30)
 
-        btn_rect = pygame.Rect(VIRTUAL_WIDTH//2 - 150, VIRTUAL_HEIGHT//2 + 220, 300, 60)
+        btn_rect = pygame.Rect(VIRTUAL_WIDTH//2 - 120, VIRTUAL_HEIGHT//2 + 210, 240, 50)
         is_hover = btn_rect.collidepoint(gs.mouse_pos)
-        prompt = "VEREDITO..." if gs.narrative_chars >= len(full_text) else "PULAR"
+        prompt = "INICIAR" if len(visible_text) >= len(full_text) else "PULAR"
         draw_button(surface, btn_rect, prompt, vs.font_ui, GOLD_COLOR, hover=is_hover)
         return
 
@@ -501,7 +520,7 @@ def handle_input(gs, ins, scale):
         if gs.state == "STORY":
             if event.type == pygame.MOUSEBUTTONDOWN:
                 mx, my = [p // scale for p in event.pos]
-                btn_rect = pygame.Rect(VIRTUAL_WIDTH//2 - 150, VIRTUAL_HEIGHT//2 + 220, 300, 60)
+                btn_rect = pygame.Rect(VIRTUAL_WIDTH//2 - 120, VIRTUAL_HEIGHT//2 + 210, 240, 50)
                 if btn_rect.collidepoint(mx, my):
                     gs.__init__(); gs.state = "PLAYING"; ins.reset_pos()
             continue
