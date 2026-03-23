@@ -115,11 +115,11 @@ def draw_angel(surf, x, y, size, time_val):
             (x + (size + 30) * side, y - size * 0.5 + wing_flap),
             (x + 5 * side, y - size * 0.2)
         ]
-        pygame.draw.polygon(surf, (240, 240, 255, 160), wing_pts)
+        pygame.draw.polygon(surf, (220, 240, 255, 160), wing_pts)
         pygame.draw.polygon(surf, (255, 255, 255), wing_pts, width=2)
     
     # Body (White Silhouette) - More cohesive shape
-    pygame.draw.circle(surf, (255, 255, 255), (x, int(y - size * 1.1)), size // 3) # Head
+    pygame.draw.circle(surf, (255, 225, 200), (x, int(y - size * 1.1)), size // 3) # Head
     body_rect = pygame.Rect(x - size // 2, y - size, size, size * 1.2)
     pygame.draw.ellipse(surf, (255, 255, 255), body_rect) # Robe
     
@@ -139,7 +139,6 @@ class GameState:
         self.cards_processed = 0
         self.cards_list = [generate_random_card(self.level) for _ in range(10)]
         self.current_card_index, self.score, self.lives = 0, 0, 3
-        self.combo, self.max_combo = 0, 0
         self.feedback_message, self.feedback_timer = "", 0
         self.decision_state, self.decision_start_time = None, 0
         self.timer_max, self.timer_start = 5000, pygame.time.get_ticks()
@@ -152,6 +151,7 @@ class GameState:
         self.narrative_chars = 0
         self.last_narrative_update = 0
         self.mouse_pos = (0, 0)
+        self.victory_choice = None # REENCARNAR or PARAISO
 
     def get_current_card(self):
         if self.current_card_index >= len(self.cards_list):
@@ -219,12 +219,11 @@ def process_decision(gs, ins, auto_fail=False):
         
         correct = (decision == "HELL" and total_good < total_crimes) or (decision == "HEAVEN" and total_good >= total_crimes)
         if correct:
-            gs.combo += 1; gs.max_combo = max(gs.max_combo, gs.combo); bonus = (gs.combo // 3) * 5
-            gs.score += 10 + bonus; gs.score_pop_timer = 20
-            gs.feedback_message = f"CORRETO!" if bonus == 0 else f"COMBO x{gs.combo}!"
+            gs.score += 10; gs.score_pop_timer = 20
+            gs.feedback_message = "CORRETO!"
             gs.feedback_color = FEEDBACK_CORRECT; gs.flash_alpha, gs.flash_color = 80, (100, 255, 100)
         else:
-            gs.combo = 0; gs.lives -= 1; gs.score = max(0, gs.score - 5); gs.life_flash_timer = 30
+            gs.lives -= 1; gs.score = max(0, gs.score - 5); gs.life_flash_timer = 30
             gs.feedback_message = "ERRADO!" if not auto_fail else "TEMPO ESGOTADO!"
             gs.feedback_color = FEEDBACK_WRONG; gs.shake_intensity, gs.flash_alpha, gs.flash_color = 15, 100, (255, 100, 100)
             if gs.lives <= 0: gs.state = "GAMEOVER"
@@ -273,6 +272,15 @@ def update(gs, ins, scale):
             ins.card_pos[1] += (ty - ins.card_pos[1]) * 0.15
     else:
         if pygame.time.get_ticks() - gs.decision_start_time > 600: gs.next_card(); ins.reset_pos()
+    
+    # Level Up / Victory Choice Trigger
+    if gs.state == "PLAYING" and gs.score >= gs.level * 50:
+        if gs.level < 20: 
+            gs.state = "LEVEL_UP"
+        else: 
+            gs.state = "VICTORY_CHOICE"
+            gs.narrative_chars = 0
+            
     if gs.feedback_timer > 0: gs.feedback_timer -= 1
     else: gs.feedback_message = ""
 
@@ -312,6 +320,27 @@ def draw_character(surf, x, y, scale, color, gender="M"):
     scaled_s = pygame.transform.smoothscale(s, (int(100 * scale), int(140 * scale)))
     surf.blit(scaled_s, (x - scaled_s.get_width()//2, y - scaled_s.get_height()//2))
 
+def draw_devil(surf, x, y, size, time):
+    body_color = (180, 20, 0); horn_color = (120, 10, 0)
+    f_y = y + math.sin(time * 0.15 + x * 0.05) * 8
+    
+    # Tail
+    tail_offset = math.sin(time * 0.1) * 10
+    points = [(x, f_y + size * 0.5), (x - 15 - tail_offset, f_y + size * 0.8), (x - 25 - tail_offset, f_y + size * 0.3)]
+    pygame.draw.lines(surf, body_color, False, points, 3)
+    pygame.draw.circle(surf, body_color, points[-1], 4)
+    
+    # Body & Head
+    pygame.draw.ellipse(surf, body_color, (x - size//2, f_y - size//4, size, size))
+    pygame.draw.circle(surf, body_color, (x, f_y - size//3), size//2)
+    # Horns
+    pygame.draw.polygon(surf, horn_color, [(x-12, f_y-size//2-5), (x-4, f_y-size//2), (x-15, f_y-size//2+5)])
+    pygame.draw.polygon(surf, horn_color, [(x+12, f_y-size//2-5), (x+4, f_y-size//2), (x+15, f_y-size//2+5)])
+    # Eyes
+    eye_pulse = int(180 + math.sin(time * 0.2) * 75)
+    pygame.draw.circle(surf, (eye_pulse, eye_pulse, 0), (x - 6, f_y - size//3), 3)
+    pygame.draw.circle(surf, (eye_pulse, eye_pulse, 0), (x + 6, f_y - size//3), 3)
+
 def draw_hell_effects(surf, rect, time):
     # Dynamic Fire/Lava at bottom
     for i in range(8):
@@ -335,11 +364,24 @@ def draw_heaven_effects(surf, rect, time):
         s = pygame.Surface((r*2, r*2), pygame.SRCALPHA)
         pygame.draw.circle(s, (255, 255, 255, 40), (r, r), r)
         surf.blit(s, (cx - r, cy - r))
-    # Vertical Rays
-    for i in range(3):
-        rx = rect.left + 40 + i * 50
-        alpha = int(30 + math.sin(time * 0.02 + i) * 15)
-        pygame.draw.rect(surf, (200, 240, 255, alpha), (rx, 0, 20, rect.height))
+    # Floating Feathers - Swaying and falling slowly
+    for i in range(5):
+        seed = i * 1.5
+        fy = (time * 0.7 + i * 120) % (rect.height + 40) - 20
+        sway = math.sin(time * 0.03 + seed) * 20
+        fx = rect.left + (rect.width // 2) + sway + (i - 2) * 25
+        s = pygame.Surface((15, 8), pygame.SRCALPHA)
+        pygame.draw.ellipse(s, (255, 255, 255, 140), (0, 0, 15, 8))
+        rot_s = pygame.transform.rotate(s, math.cos(time * 0.03 + seed) * 30)
+        surf.blit(rot_s, (fx, fy))
+
+    # Twinkling Sparkles - Subtle glowing spots
+    for i in range(12):
+        sx = rect.left + (i * 47) % rect.width
+        sy = (i * 89 + time * 0.2) % rect.height
+        pulse = math.sin(time * 0.1 + i) * 100 + 155
+        alpha = max(0, min(255, int(pulse)))
+        pygame.draw.circle(surf, (255, 255, 200, alpha), (int(sx), int(sy)), 2)
 
 def draw_button(surf, rect, text, font, color, hover=False):
     b_color = (min(255, color[0]+30), min(255, color[1]+30), min(255, color[2]+30)) if hover else color
@@ -435,6 +477,62 @@ def draw(surface, gs, ins, vs):
         draw_button(surface, btn_rect, prompt, vs.font_ui, GOLD_COLOR, hover=is_hover)
         return
 
+    if gs.state == "LEVEL_UP":
+        # Full Thematic Background
+        surface.blit(vs.bg_surf, (0, 0))
+        draw_hell_effects(surface, pygame.Rect(0, 0, VIRTUAL_WIDTH//2, VIRTUAL_HEIGHT), gs.time_counter)
+        draw_heaven_effects(surface, pygame.Rect(VIRTUAL_WIDTH//2, 0, VIRTUAL_WIDTH//2, VIRTUAL_HEIGHT), gs.time_counter)
+        
+        # Add Devils and Angels
+        for i in range(2):
+            draw_devil(surface, 120 + i*160, VIRTUAL_HEIGHT//2, 30, gs.time_counter)
+            draw_angel(surface, VIRTUAL_WIDTH - 120 - i*160, VIRTUAL_HEIGHT//2, 35, gs.time_counter)
+
+        # Subtle Overlay
+        ov = pygame.Surface((VIRTUAL_WIDTH,VIRTUAL_HEIGHT), pygame.SRCALPHA); ov.fill((0,0,0,140)); surface.blit(ov, (0,0))
+        
+        # Central Box
+        box_w, box_h = 500, 240
+        box_rect = pygame.Rect(VIRTUAL_WIDTH//2 - box_w//2, VIRTUAL_HEIGHT//2 - 120, box_w, box_h)
+        pygame.draw.rect(surface, (15, 15, 25, 220), box_rect, border_radius=15)
+        
+        # Glowing Border
+        glow_pulse = int(180 + math.sin(gs.time_counter * 0.1) * 75)
+        # Use a temporary surface for the glowing alpha border
+        s = pygame.Surface((box_w, box_h), pygame.SRCALPHA)
+        pygame.draw.rect(s, (*GOLD_COLOR, glow_pulse), (0, 0, box_w, box_h), width=3, border_radius=15)
+        surface.blit(s, box_rect.topleft)
+        
+        draw_text_centered_shadow(surface, f"FASE {gs.level} CONCLUÍDA!", vs.font_feedback, GOLD_COLOR, box_rect.top + 30)
+        draw_text_centered_shadow(surface, f"Seu julgamento foi justo.", vs.font_ui, (220, 240, 255), box_rect.top + 95)
+        
+        btn_rect = pygame.Rect(VIRTUAL_WIDTH//2 - 120, box_rect.bottom - 80, 240, 60)
+        is_hover = btn_rect.collidepoint(gs.mouse_pos)
+        draw_button(surface, btn_rect, "CONTINUAR", vs.font_ui, GOLD_COLOR, hover=is_hover)
+        return
+
+    if gs.state == "VICTORY_CHOICE":
+        ov = pygame.Surface((VIRTUAL_WIDTH,VIRTUAL_HEIGHT), pygame.SRCALPHA); ov.fill((0,10,30,220)); surface.blit(ov, (0,0))
+        draw_angel(surface, VIRTUAL_WIDTH//2, VIRTUAL_HEIGHT//2 - 120, 50, gs.time_counter)
+        
+        narrative = "Sua jornada como juiz termina aqui. Você provou sua retidão e justiça. Diante de sua sabedoria, os portões se abrem. Qual destino desejas para si mesmo?"
+        chars_to_show = int(gs.narrative_chars)
+        visible_text = str(narrative)[:chars_to_show]
+        gs.narrative_chars += 0.5 # Slow typewriter
+        
+        box_rect = pygame.Rect(VIRTUAL_WIDTH//2 - 300, VIRTUAL_HEIGHT//2 - 20, 600, 160)
+        pygame.draw.rect(surface, (10, 10, 25, 200), box_rect, border_radius=15)
+        pygame.draw.rect(surface, GOLD_COLOR, box_rect, width=2, border_radius=15)
+        draw_text_wrapped(surface, visible_text, vs.font_content, (240, 240, 255), box_rect.inflate(-40, -40))
+        
+        if chars_to_show >= len(narrative):
+            btn_reenc = pygame.Rect(VIRTUAL_WIDTH//2 - 220, box_rect.bottom + 30, 210, 60)
+            btn_paraiso = pygame.Rect(VIRTUAL_WIDTH//2 + 10, box_rect.bottom + 30, 210, 60)
+            is_h_r = btn_reenc.collidepoint(gs.mouse_pos); is_h_p = btn_paraiso.collidepoint(gs.mouse_pos)
+            draw_button(surface, btn_reenc, "REENCARNAR", vs.font_ui, (180, 255, 180), hover=is_h_r)
+            draw_button(surface, btn_paraiso, "PARAÍSO", vs.font_ui, HEAVEN_GLOW, hover=is_h_p)
+        return
+
     cx = ins.card_pos[0] + CARD_WIDTH // 2
     # Card
     card = gs.get_current_card()
@@ -509,7 +607,6 @@ def draw(surface, gs, ins, vs):
     s_rendered = pygame.transform.scale(s_rendered, (int(s_rendered.get_width()*s_scale), int(s_rendered.get_height()*s_scale)))
     surface.blit(s_rendered, (s_box.centerx - s_rendered.get_width()//2, s_box.centery - s_rendered.get_height()//2))
 
-    if gs.combo > 1: draw_shadowed_text(surface, f"COMBO x{gs.combo}", vs.font_history, (100, 255, 200), (VIRTUAL_WIDTH // 2 - 40, 35))
     for i, h in enumerate(gs.history):
         draw_shadowed_text(surface, h, vs.font_history, (180, 180, 190), (25, 95 + i*22))
 
@@ -524,17 +621,39 @@ def draw(surface, gs, ins, vs):
     if gs.feedback_message: draw_text_centered_shadow(surface, gs.feedback_message, vs.font_feedback, gs.feedback_color, VIRTUAL_HEIGHT - 60)
     
     if gs.state == "GAMEOVER":
-        ov = pygame.Surface((VIRTUAL_WIDTH,VIRTUAL_HEIGHT), pygame.SRCALPHA); ov.fill((0,0,0,230)); surface.blit(ov, (0,0))
-        draw_text_centered_shadow(surface, "JOGADO ÀS TREVAS", vs.font_feedback, (255,50,50), VIRTUAL_HEIGHT//2-100)
-        draw_text_centered_shadow(surface, f"Você falhou na fase {gs.level}. Destino: Inferno.", vs.font_content, (200,200,200), VIRTUAL_HEIGHT//2 - 20)
+        # Full Hell Background
+        for x in range(VIRTUAL_WIDTH):
+            r = x / VIRTUAL_WIDTH; c = [int(HELL_DARK[i]*(1-r) + 20*r) for i in range(3)]
+            pygame.draw.line(surface, tuple(c), (x, 0), (x, VIRTUAL_HEIGHT))
+        
+        draw_hell_effects(surface, pygame.Rect(0, 0, VIRTUAL_WIDTH, VIRTUAL_HEIGHT), gs.time_counter)
+        
+        # Draw some devils
+        for i in range(4):
+            dx = 150 + i * 180; dy = VIRTUAL_HEIGHT // 2 + 20 + math.sin(gs.time_counter * 0.05 + i) * 30
+            draw_devil(surface, dx, dy, 30, gs.time_counter)
+            
+        ov = pygame.Surface((VIRTUAL_WIDTH,VIRTUAL_HEIGHT), pygame.SRCALPHA); ov.fill((0,0,0,100)); surface.blit(ov, (0,0))
+        
+        title_pulse = int(200 + math.sin(gs.time_counter * 0.1) * 55)
+        draw_text_centered_shadow(surface, "JOGADO ÀS TREVAS", vs.font_feedback, (title_pulse, 50, 50), VIRTUAL_HEIGHT//2-100)
+        draw_text_centered_shadow(surface, f"Você falhou na fase {gs.level}. Destino: Inferno.", vs.font_content, (220,220,220), VIRTUAL_HEIGHT//2 - 20)
+        
         btn_rect = pygame.Rect(VIRTUAL_WIDTH//2 - 150, VIRTUAL_HEIGHT//2 + 80, 300, 70)
         is_hover = btn_rect.collidepoint(gs.mouse_pos)
-        draw_button(surface, btn_rect, "MENU PRINCIPAL", vs.font_ui, (200, 200, 210), hover=is_hover)
+        draw_button(surface, btn_rect, "MENU PRINCIPAL", vs.font_ui, (255, 100, 50), hover=is_hover)
+        return
 
     if gs.state == "VICTORY":
-        ov = pygame.Surface((VIRTUAL_WIDTH,VIRTUAL_HEIGHT), pygame.SRCALPHA); ov.fill((0,30,60,230)); surface.blit(ov, (0,0))
-        draw_text_centered_shadow(surface, "REENCARNAÇÃO", vs.font_feedback, HEAVEN_GLOW, VIRTUAL_HEIGHT//2-100)
-        draw_text_centered_shadow(surface, "Você provou ser um juiz justo. A vida te chama novamente.", vs.font_content, (200,255,200), VIRTUAL_HEIGHT//2 - 20)
+        bg_col = (0,30,60,230) if gs.victory_choice == "PARAISO" else (10, 50, 10, 230)
+        ov = pygame.Surface((VIRTUAL_WIDTH,VIRTUAL_HEIGHT), pygame.SRCALPHA); ov.fill(bg_col); surface.blit(ov, (0,0))
+        
+        title = "REENCARNAÇÃO" if gs.victory_choice == "REENCARNAR" else "PARAÍSO ETERNO"
+        color = (180, 255, 180) if gs.victory_choice == "REENCARNAR" else HEAVEN_GLOW
+        desc = "A vida te chama novamente para uma nova jornada." if gs.victory_choice == "REENCARNAR" else "Você descansará na luz eterna por toda a eternidade."
+        
+        draw_text_centered_shadow(surface, title, vs.font_feedback, color, VIRTUAL_HEIGHT//2-100)
+        draw_text_centered_shadow(surface, desc, vs.font_content, (200,255,200), VIRTUAL_HEIGHT//2 - 20)
         btn_rect = pygame.Rect(VIRTUAL_WIDTH//2 - 150, VIRTUAL_HEIGHT//2 + 80, 300, 70)
         is_hover = btn_rect.collidepoint(gs.mouse_pos)
         draw_button(surface, btn_rect, "VOLTAR AO MENU", vs.font_ui, GOLD_COLOR, hover=is_hover)
@@ -571,6 +690,23 @@ def handle_input(gs, ins, scale):
                 btn_rect = pygame.Rect(VIRTUAL_WIDTH//2 - 120, (VIRTUAL_HEIGHT//2 - 50) + 260 + 20, 240, 50)
                 if btn_rect.collidepoint(mx, my):
                     gs.__init__(); gs.state = "PLAYING"; ins.reset_pos()
+            continue
+
+        if gs.state == "LEVEL_UP":
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                mx, my = [p // scale for p in event.pos]
+                btn_rect = pygame.Rect(VIRTUAL_WIDTH//2 - 120, VIRTUAL_HEIGHT//2 + 60, 240, 60)
+                if btn_rect.collidepoint(mx, my):
+                    gs.level += 1; gs.state = "PLAYING"; gs.timer_start = pygame.time.get_ticks(); ins.reset_pos()
+            continue
+
+        if gs.state == "VICTORY_CHOICE":
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                mx, my = [p // scale for p in event.pos]
+                btn_reenc = pygame.Rect(VIRTUAL_WIDTH//2 - 220, VIRTUAL_HEIGHT//2 + 140 + 30, 210, 60)
+                btn_paraiso = pygame.Rect(VIRTUAL_WIDTH//2 + 10, VIRTUAL_HEIGHT//2 + 140 + 30, 210, 60)
+                if btn_reenc.collidepoint(mx, my): gs.victory_choice = "REENCARNAR"; gs.state = "VICTORY"
+                elif btn_paraiso.collidepoint(mx, my): gs.victory_choice = "PARAISO"; gs.state = "VICTORY"
             continue
 
         if gs.state in ["GAMEOVER", "VICTORY"]:
