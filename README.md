@@ -5,7 +5,7 @@ Um jogo de julgamento moral estilizado feito com **Python** e **Pygame**. Decida
 ## 🎮 Como Jogar
 ### Opção 1: Jogar no Navegador (Recomendado) 🌐
 Você pode jogar agora mesmo sem baixar nada!
-**👉 [Clique aqui para jogar no Navegador](https://Nathangch.github.io/CavernaGame/)**
+**👉 [Clique aqui para jogar no Navegador](https://nathangch.github.io/HeavenorHellGame/)**
 
 ### Opção 2: Executável Standalone 🚀
 Basta baixar o arquivo `HeavenOrHell.exe` (na pasta `dist`) e clicar duas vezes para jogar offline.
